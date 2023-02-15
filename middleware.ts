@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 import { i18n } from './i18n-config'
-
 import { match as matchLocale } from '@formatjs/intl-localematcher'
 import Negotiator from 'negotiator'
+import { getToken } from "next-auth/jwt"
 
 function getLocale(request: NextRequest): string | undefined {
   // Negotiator expects plain object so we need to transform headers
@@ -18,19 +18,21 @@ function getLocale(request: NextRequest): string | undefined {
   return matchLocale(languages, locales, i18n.defaultLocale)
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+  const locale = getLocale(request)
+  const session = await getToken({ req: request, secret: process.env.SECRET! })
 
-  // // `/_next/` and `/api/` are ignored by the watcher, but we need to ignore files in `public` manually.
-  // // If you have one
-  // if (
-  //   [
-  //     '/manifest.json',
-  //     '/favicon.ico',
-  //     // Your other files in `public`
-  //   ].includes(pathname)
-  // )
-  //   return
+  // https://www.youtube.com/watch?v=wRstTmn0y_c
+  // Middleware to redirect to login page if no auth
+  if (!session) {
+    const requestedPage = request.nextUrl.pathname;
+    const url = request.nextUrl.clone()
+    url.pathname = `/${locale}/login`
+    url.search = `p=${requestedPage}`
+
+    return NextResponse.redirect(url);
+  }
 
   // Check if there is any supported locale in the pathname
   const pathnameIsMissingLocale = i18n.locales.every(
@@ -39,15 +41,17 @@ export function middleware(request: NextRequest) {
 
   // Redirect if there is no locale
   if (pathnameIsMissingLocale) {
-    const locale = getLocale(request)
 
     // e.g. incoming request is /products
     // The new URL is now /en-US/products
     return NextResponse.redirect(new URL(`/${locale}/${pathname}`, request.url))
   }
+
+  return NextResponse.next()
 }
 
 export const config = {
   // Matcher ignoring `/_next/` and `/api/`
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  // matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/en/login'],
 }

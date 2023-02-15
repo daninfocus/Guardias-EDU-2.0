@@ -11,7 +11,6 @@ export default async function Home({
   const dictionary = await getDictionary(lang)
   return (
     <div>
-      <LocaleSwitcher />
       <p>Current locale: {lang}</p>
       <p>
         This text is rendered on the server:{' '}
